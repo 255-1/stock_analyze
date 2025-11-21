@@ -118,14 +118,12 @@ def allocate_today_instant(
 
     参数说明：与 backtest_blended_portfolio 大致对应，date 指定为 None 时使用 prices 中最后可用观测日
     """
-    # 准备月度价格并确定作为 "今天" 的日期
     prices_monthly = compute_monthly_prices(prices)
     if date is None:
         date = prices_monthly.index[-1]
     else:
         date = pd.to_datetime(date)
         if date not in prices_monthly.index:
-            # 找到最近的可用月末日期（<= 指定日期）
             date = prices_monthly.index[prices_monthly.index.get_indexer([date], method='ffill')[0]]
 
     needed = [cash_col, longbond_col, gold_col, equity_col]
@@ -168,9 +166,6 @@ def allocate_today_instant(
         equity_col: float(allocated3[2])
     }
 
-    # 计算金额分配和可买份额
-    amounts = {c: target_weights[c] * amount for c in needed}
+    return {c: target_weights[c] * amount for c in needed}
 
-    return amounts
-
-print(allocate_today_instant(get_data(), 158000, vol_lookback=6)['amounts'])
+print(allocate_today_instant(get_data(), 158000, alpha=0.5, cash_weight=0.25, vol_lookback=3))
