@@ -74,16 +74,11 @@ def _annualize_vol(returns: pd.Series, periods_per_year: int = 12) -> float:
 
 
 def inverse_vol_weights(vols: np.ndarray) -> np.ndarray:
-    """简单的逆波动率权重（归一化）"""
     inv = 1.0 / np.where(vols <= 0, 1e-8, vols)
     w = inv / np.sum(inv)
     return w
 
 def compute_monthly_prices(prices: pd.DataFrame) -> pd.DataFrame:
-    """把原始价格（可能是日频）转换为每月月末收盘价。
-    要求 prices 有 DatetimeIndex 或包含 'date' 列。
-    返回以月末为索引的 DataFrame。
-    """
     df = prices.copy()
     if 'date' in df.columns:
         df = df.set_index(pd.to_datetime(df['date'])).drop(columns=['date'])
@@ -102,9 +97,8 @@ def allocate_today_instant(
     equity_col: str = '股票',
     alpha: float = 0.5,
     cash_weight: float = 0.25,
-    vol_lookback: int = 12,
+    vol_lookback: int = 6,
     date: Optional[pd.Timestamp] = None,
-    allow_fractional_shares: bool = True
 ) -> Dict[str, any]:
     """
     给定今天的可投资金额 amount（元），计算如何按回测中使用的规则配置仓位。
@@ -139,12 +133,10 @@ def allocate_today_instant(
         if c not in prices_monthly.columns:
             raise KeyError(f"prices missing required column: {c}")
 
-    # 计算用于 RP 的历史窗口
     idx = prices_monthly.index.get_loc(date)
     lookback_start = max(0, idx - vol_lookback)
     window_returns = prices_monthly.pct_change().iloc[lookback_start:idx+1].dropna(how='all')
 
-    # vols 或 cov
     if window_returns.shape[0] < 2:
         vols = np.array([
             _annualize_vol(prices_monthly[longbond_col].pct_change().dropna()) if prices_monthly[longbond_col].dropna().shape[0] > 1 else 1e-8,
@@ -163,7 +155,6 @@ def allocate_today_instant(
     except Exception:
         rp3 = inverse_vol_weights(vols)
 
-    # base permanent portfolio 3-asset split (each 0.25 normally) -> normalized
     pp3 = np.array([0.25, 0.25, 0.25])
     pp3 = pp3 / pp3.sum()
 
@@ -177,36 +168,9 @@ def allocate_today_instant(
         equity_col: float(allocated3[2])
     }
 
-    # 最新价格
-    latest_prices = prices_monthly.loc[date, needed].to_dict()
-
     # 计算金额分配和可买份额
     amounts = {c: target_weights[c] * amount for c in needed}
-    shares = {}
-    cash_after = 0.0
-    for c in needed:
-        p = float(latest_prices[c])
-        if p <= 0 or np.isnan(p):
-            shares[c] = 0.0
-            continue
-        if allow_fractional_shares:
-            shares[c] = amounts[c] / p
-        else:
-            # 向下取整
-            n = int(np.floor(amounts[c] / p))
-            shares[c] = n
-            cash_after += amounts[c] - n * p
 
-    result = {
-        'as_of_date': date,
-        'target_weights': target_weights,
-        'amounts': amounts,
-        'prices': latest_prices,
-        'shares': shares,
-        'cash_remaining': cash_after if not allow_fractional_shares else 0.0
-    }
-
-    return result
-
+    return amounts
 
 print(allocate_today_instant(get_data(), 158000, vol_lookback=6)['amounts'])
