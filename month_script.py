@@ -168,4 +168,6 @@ def allocate_today_instant(
 
     return {c: target_weights[c] * amount for c in needed}
 
+#vol_lookback 风险平价回看月数
+#alpha=0 纯永久投资组合， alpha=1 纯全天候投资， 我个人一般0.3~0.5选择
 print(allocate_today_instant(get_data(), 158000, alpha=0.5, cash_weight=0.25, vol_lookback=3))
